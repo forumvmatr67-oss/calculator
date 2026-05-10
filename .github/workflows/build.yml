@@ -1,0 +1,48 @@
+name: CI
+on:
+  push:
+    branches: [ master ]
+  # Добавляем возможность запустить workflow вручную из интерфейса GitHub
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+      
+      # 1. Устанавливаем Python и Buildozer
+      - name: Install Buildozer and dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y git zip unzip openjdk-17-jdk python3-pip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev
+          pip3 install --user buildozer
+      
+      # 2. Кэшируем скачанные зависимости, чтобы следующая сборка была быстрее
+      - name: Cache Buildozer global directory
+        uses: actions/cache@v2
+        with:
+          path: .buildozer_global
+          key: buildozer-global-${{ hashFiles('buildozer.spec') }}
+          
+      - name: Cache .buildozer
+        uses: actions/cache@v2
+        with:
+          path: .buildozer
+          key: ${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+          
+      # 3. Генерируем buildozer.spec, правим требования и запускаем сборку
+      - name: Build APK with Buildozer
+        id: buildozer
+        run: |
+          buildozer init
+          # Меняем требования в .spec файле под ваш калькулятор
+          sed -i 's/requirements = python3,kivy/requirements = python3,kivy==2.3.0,android/' buildozer.spec
+          buildozer -v android debug
+          
+      # 4. Загружаем готовый файл как артефакт сборки, чтобы его можно было скачать
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: my-kivy-apk
+          path: bin/*.apk
